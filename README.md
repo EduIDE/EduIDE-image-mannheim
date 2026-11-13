@@ -17,7 +17,7 @@ Published as `ghcr.io/eduide/eduide-image-mannheim/java-25`.
    - extensions: unpack the vsix into `/home/theia/plugins/<extension id>` (see the Live Preview step in the `Dockerfile`)
    - settings: edit `user/settings.json`, merged into the edition's user settings (yours win)
    - keybindings: edit `user/keymaps.json`
-4. Change the image name in `.github/workflows/build.yml` (`image-name`) and in `scripts/smoke-test.sh` usage, e.g. `eduide/<your-repo>/<name>`.
+4. Change the image name in `.github/workflows/build.yml` (`image-name`, and again in the smoke job), e.g. `eduide/<your-repo>/<name>`.
    The workflow is the shared EduIDE one and publishes multi-arch (amd64 and arm64) to `ghcr.io`.
 5. Push to `main`, or open a pull request, to build.
    Every build runs the smoke test: the IDE answers HTTP 200 on :3000, the EduIDE plugins are present, `java` and `mvn` run.
