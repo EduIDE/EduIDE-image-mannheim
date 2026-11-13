@@ -1,0 +1,34 @@
+name: Build, test and publish
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    uses: EduIDE/.github/.github/workflows/build-and-push-docker-image.yml@v1
+    with:
+      image-name: eduide/eduide-image-mannheim/java-25
+      docker-file: Dockerfile
+    secrets: inherit
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: scripts/smoke-test.sh ghcr.io/eduide/eduide-image-mannheim/java-25:${{ needs.build.outputs.sha_tag }}

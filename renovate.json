@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile$/"],
+      "matchStrings": ["ARG EDUIDE_VERSION=(?<currentValue>\\S+)"],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ghcr.io/eduide/eduide/java-25-standalone",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
