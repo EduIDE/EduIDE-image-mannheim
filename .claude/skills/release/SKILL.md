@@ -18,10 +18,6 @@ images, charts and vsix files carry `X.Y.Z` without the prefix.
 
 ## Reference for this repository
 
-Version files (release.yml refuses a stable version they do not state):
-
-| File | Field |
-|---|---|
 Version files: none. The build stamps the version from the tag.
 
 What a release publishes:
@@ -35,19 +31,17 @@ EduIDE dependencies this repository pins:
 
 | Repository | Pinned in | Current pin | How to bump |
 |---|---|---|---|
-| EduIDE (edition image `java-25-standalone`) | `Dockerfile`, `ARG EDUIDE_VERSION` | `pr-221` | set to the released EduIDE version `X.Y.Z`; latest: `gh release list -R EduIDE/EduIDE --exclude-pre-releases --limit 1`. The edition image must exist: `gh api /orgs/EduIDE/packages/container/eduide%2Fjava-25-standalone/versions --jq ".[].metadata.container.tags[]"` |
+| EduIDE (edition image `java-25-standalone`) | `Dockerfile`, `ARG EDUIDE_VERSION` | `pr-221` | set to the released EduIDE version `X.Y.Z`; latest: `gh release list -R EduIDE/EduIDE --exclude-drafts --exclude-pre-releases --limit 1`. The edition image must exist: `gh api /orgs/EduIDE/packages/container/eduide%2Fjava-25-standalone/versions --jq ".[].metadata.container.tags[]"` |
 
 Who pins this repository (tell the user after the release):
 
-| Repository | Pinned in |
-|---|---|
 None. The image is deployed through installation Helm values, for example `ghcr.io/eduide/eduide-image-mannheim/java-25:X.Y.Z`.
 
 ## 1. Find the last release and what is unreleased
 
 ```bash
 gh release list -R EduIDE/EduIDE-image-mannheim --limit 10
-LAST=$(gh release list -R EduIDE/EduIDE-image-mannheim --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
+LAST=$(gh release list -R EduIDE/EduIDE-image-mannheim --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
 git fetch origin --tags
 git log --first-parent --format='%h %s' "$LAST"..origin/main
 ```
@@ -91,7 +85,7 @@ For each row of "EduIDE dependencies":
 
 1. Read the current pin from the file.
 2. Find the latest release of that repository:
-   `gh release list -R EduIDE/<repo> --exclude-pre-releases --limit 1`
+   `gh release list -R EduIDE/<repo> --exclude-drafts --exclude-pre-releases --limit 1`
    (for a prerelease of this repository, also look at its prereleases).
 3. Check whether it has unreleased changes on main:
    `gh api repos/EduIDE/<repo>/compare/<its last tag>...main --jq '.ahead_by, (.commits[].commit.message | split("\n")[0])'`
@@ -158,13 +152,16 @@ Rules:
   prefixes in EduIDE-Helm, `**Security:**` markers).
 - Add `### Upgrade notes` when an operator has to do something beyond
   installing the new version.
+- If an earlier `-rc.N` of this version got a section of its own, copy its
+  entries into the stable section: the stable notes cover everything since the
+  last stable release.
 - Use hyphens, never em or en dashes.
 
 ## 5. Open the release pull request
 
 On a branch `release/X.Y.Z` from the latest `origin/main`:
 
-1. Bump every row of "Version files" to `X.Y.Z`.
+1. Bump every row of "Version files" to `X.Y.Z` (skip if there are none).
 2. Apply the dependency bumps agreed in step 3.
 3. Write the CHANGELOG section from step 4.
 4. Run the repository's checks (see AGENTS.md / CI) and anything a version
@@ -181,36 +178,49 @@ gh pr create -R EduIDE/EduIDE-image-mannheim --title "chore(release): X.Y.Z" --b
 Give the user the PR link, watch CI and fix failures. Do not merge it yourself
 unless the user asks.
 
-**Release candidate:** a `-rc.N` needs no version bump, but release.yml still
-refuses a version without a `## [X.Y.Z-rc.N]` section in CHANGELOG.md. Put that
-section on the branch to test and dispatch from it (step 6 with
-`--ref <branch>`). A prerelease never becomes "latest".
+**Release candidate shortcut:** a `-rc.N` needs no release pull request.
+release.yml does not check version files for a prerelease and falls back to the
+Unreleased section for the notes. Dispatch it from the branch to test
+(step 6 with `--ref <branch>`). A prerelease never becomes "latest". Its
+entries stay under Unreleased, so the later stable section still lists every
+change since the last stable release.
 
 ## 6. Run release.yml after the merge
 
 ```bash
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 gh workflow run release.yml -R EduIDE/EduIDE-image-mannheim --ref main -f version=X.Y.Z
-sleep 5
-RUN=$(gh run list -R EduIDE/EduIDE-image-mannheim --workflow release.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')
+# The run of this dispatch: yours, created after START. The release
+# concurrency group runs one release per repository at a time.
+ME=$(gh api user --jq .login)
+until RUN=$(gh run list -R EduIDE/EduIDE-image-mannheim --workflow release.yml --event workflow_dispatch \
+    --user "$ME" --created ">=$START" --limit 1 --json databaseId --jq '.[0].databaseId // empty') \
+    && [[ -n "$RUN" ]]; do sleep 3; done
 gh run watch "$RUN" -R EduIDE/EduIDE-image-mannheim --exit-status
 ```
 
 If a job waits for an environment approval (`prod`), tell the user to approve
-it in the run page. If `validate` fails, the message says what to fix; fix it
-in a new pull request, never by editing tags. If a later job fails, fix the
-cause and use "Re-run failed jobs": the tag stays, nothing is published twice.
-Never delete a tag or a release once something was published under it; ship
-the next patch version instead.
+it in the run page. If the `release` job fails, its message says what to fix;
+fix it in a new pull request. Until the last job (`publish-release`) succeeds,
+the GitHub Release is a draft and the tag does not exist. If a later job
+fails, fix the cause and use "Re-run failed jobs": the draft is reused and
+jobs that succeeded do not run again. A new dispatch of the same version
+replaces the leftover draft, but fails where a version cannot be pushed twice
+(a chart, Open VSX), so prefer the rerun. Once the release is published, never
+delete its tag or release; ship the next patch version instead.
+
+Image builds: if the multi-arch merge of an image fails, "Re-run failed jobs"
+cannot find the per-architecture digests of the earlier attempt (the shared
+builder names them per attempt). Use "Re-run all jobs" instead; the release is
+still a draft, so the rerun replaces it and pushes the images again.
 
 ## 7. Verify what was published
 
-Check every row of "What a release publishes", for example:
+Check every row of "What a release publishes" with the command in its Check
+column (the `verify` job already ran them), and that the release is public:
 
 ```bash
-gh release view vX.Y.Z -R EduIDE/EduIDE-image-mannheim --json url,isPrerelease,assets --jq '{url, isPrerelease, assets: [.assets[].name]}'
-crane manifest ghcr.io/eduide/<image>:X.Y.Z | jq -r '[.manifests[].platform.architecture] | join(",")'   # amd64 and arm64
-helm show chart oci://ghcr.io/eduide/charts/<chart> --version X.Y.Z
-curl -fsS https://open-vsx.org/api/<namespace>/<name>/X.Y.Z | jq -r .version
+gh release view vX.Y.Z -R EduIDE/EduIDE-image-mannheim --json url,isDraft,isPrerelease,assets --jq '{url, isDraft, isPrerelease, assets: [.assets[].name]}'
 ```
 
 Report to the user: the release link, the artifacts with their check result,
@@ -219,5 +229,9 @@ decide whether to bump it next (that repository's release skill does it).
 
 ## Repository notes
 
+- There is no release yet, so `$LAST` in step 1 is empty. For the first
+  release read the whole history (`git log --first-parent origin/main`,
+  `gh pr list --state merged` without the date filter), propose a first
+  version and ask.
 - `EDUIDE_VERSION` is `pr-221` today. release.yml refuses a release until it is a released `X.Y.Z` (that is the case once EduIDE 2.0.0 ships `java-25-standalone`). Release EduIDE first, then bump the pin here in the release pull request.
 - The version scheme is `X.Y.Z` or `X.Y.Z-rc.N`, as everywhere else. A change on the same EduIDE version is a patch bump, not the former `2.0.0-1` suffix.

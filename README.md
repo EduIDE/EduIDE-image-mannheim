@@ -17,7 +17,7 @@ Published as `ghcr.io/eduide/eduide-image-mannheim/java-25`.
    - extensions: unpack the vsix into `/home/theia/plugins/<extension id>` (see the Live Preview step in the `Dockerfile`)
    - settings: edit `user/settings.json`, merged into the edition's user settings (yours win)
    - keybindings: edit `user/keymaps.json`
-4. Change the image name in `.github/workflows/build.yml` (`image-name`, and again in the smoke job), e.g. `eduide/<your-repo>/<name>`.
+4. Change the image name in `.github/workflows/build.yml` (`image-name`, and again in the smoke job) and in the `verify` job of `.github/workflows/release.yml`, e.g. `eduide/<your-repo>/<name>`.
    The workflow is the shared EduIDE one and publishes multi-arch (amd64 and arm64) to `ghcr.io`.
 5. Push to `main`, or open a pull request, to build.
    Every build runs the smoke test: the IDE answers HTTP 200 on :3000, the EduIDE plugins are present, `java` and `mvn` run.
@@ -42,7 +42,7 @@ Releases are manual and the only way to publish a numbered tag: merge a release 
 gh workflow run release.yml -f version=2.0.0
 ```
 
-`release.yml` creates the `v2.0.0` tag and GitHub Release, builds the image as `2.0.0` and verifies it.
+`release.yml` drafts the GitHub Release, builds the image as `2.0.0`, verifies it and publishes the release, which creates the `v2.0.0` tag.
 It refuses a release while `EDUIDE_VERSION` in the `Dockerfile` is not a released EduIDE version.
 The `release` skill (`.claude/skills/release/SKILL.md`) walks through it.
 Pushes to `main` publish `latest` and `latest-<short sha>`, pull requests publish `pr-<N>`.
