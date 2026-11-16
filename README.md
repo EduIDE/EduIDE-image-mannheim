@@ -14,7 +14,7 @@ Published as `ghcr.io/eduide/eduide-image-mannheim/java-25`.
    Scorpio, the data bridge and the Theia Cloud monitor stay in the image, do not remove them.
 3. Add what you need, keep it small:
    - packages: `USER root`, `apt-get install`, then `USER theia` again
-   - extensions: unpack the vsix into `/home/theia/plugins/<extension id>` (see the Live Preview step in the `Dockerfile`)
+   - extensions: unpack the vsix into `/home/theia/plugins/<extension id>` (see the Live Preview step in the `Dockerfile` for the mechanics only: EduIDE removed Live Preview from its own images because it does not work in the cloud, so pick an extension that runs without a local server and test it in a deployed session)
    - settings: edit `user/settings.json`, merged into the edition's user settings (yours win)
    - keybindings: edit `user/keymaps.json`
 4. Change the image name in `.github/workflows/build.yml` (`image-name`, and again in the smoke job) and in the `verify` job of `.github/workflows/release.yml`, e.g. `eduide/<your-repo>/<name>`.
@@ -34,7 +34,7 @@ Adjust `renovate.json` (the `depNameTemplate`) if you derive from another editio
 
 ## Versioning
 
-The image tag is a semantic version of this repository: `2.0.0`, or `2.0.0-rc.1` for a prerelease.
+The image tag is a semantic version of this repository: `2.0.0`, or `2.0.0-rc.1` for a prerelease: `v2.0.0-rc.N` tags are marked as prereleases on GitHub.
 It usually follows the EduIDE version the image is built on; a change that only concerns this repository (new extension, setting, package) is a patch bump (`2.0.1`).
 Releases are manual and the only way to publish a numbered tag: merge a release pull request (the `CHANGELOG.md` section), then run
 
@@ -43,7 +43,8 @@ gh workflow run release.yml -f version=2.0.0
 ```
 
 `release.yml` drafts the GitHub Release, builds the image as `2.0.0`, verifies it and publishes the release, which creates the `v2.0.0` tag.
-It refuses a release while `EDUIDE_VERSION` in the `Dockerfile` is not a released EduIDE version.
+Its `version_check` refuses a release while `EDUIDE_VERSION` in the `Dockerfile` is not a plain `X.Y.Z` (so `pr-221` and release candidates are rejected).
+There is therefore no release of this image until EduIDE 2.0.0 is stable and `EDUIDE_VERSION` points at it.
 The `release` skill (`.claude/skills/release/SKILL.md`) walks through it.
 Pushes to `main` publish `latest` and `latest-<short sha>`, pull requests publish `pr-<N>`.
 Do not use `latest` in a cluster.
@@ -57,7 +58,7 @@ Merge it, then release a new version.
 
 | What | Where |
 |---|---|
-| Live Preview extension (`ms-vscode.live-server`) | `Dockerfile` |
+| Live Preview extension (`ms-vscode.live-server`); EduIDE itself dropped it because it does not work in the cloud, so verify it in a deployed session | `Dockerfile` |
 | `MAVEN_OPTS` with `--sun-misc-unsafe-memory-access=allow` (no Unsafe warnings on Java 25), appended to the base options | `Dockerfile` |
 | Editor and Java defaults (format on save, organize imports, inlay hints, telemetry off, dark theme) | `user/settings.json` |
 | Keybindings: `alt+x` closes the editor, `ctrl+alt+b` runs the build task | `user/keymaps.json` |
